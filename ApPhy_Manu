@@ -1,0 +1,76 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Oct 19 13:31:53 2018
+
+@author: Acer V15
+"""
+
+import numpy as np
+from scipy.signal import argrelextrema
+from scipy.integrate import quad
+from scipy.optimize import newton
+import matplotlib.pyplot as plt
+
+p_c = 7.404e6
+V_c = 1.28e-4
+T_c = 304
+
+def vanderWaals(T_r, V_r):
+
+    p_r = 8*T_r/(3*V_r - 1) - 3/V_r**2
+    return p_r
+    
+
+def vanderWaals_Maxwell(T_r, V_r):
+
+    p_r = vanderWaals(T_r, V_r)
+    if T_r >= 1:
+        return p_r
+
+    iprmin = argrelextrema(p_r, np.less)
+    iprmax = argrelextrema(p_r, np.greater)
+    V_r_0 = np.mean([V_r[iprmin], V_r[iprmax]])
+
+    def get_ReducedVolume(p_r_t):
+
+        poly = np.poly1d( (3*p_r_t, -(p_r_t + 8*T_r), 9, -3) )
+        roots = poly.r
+        roots.sort()
+        V_r_min, _, V_r_max = roots
+        return V_r_min, V_r_max
+
+    def get_AreaDifference(V_r_0):
+
+        p_r_t = vanderWaals(T_r, V_r_0)
+        V_r_min, V_r_max = get_ReducedVolume(p_r_t)
+        return quad(lambda v_r: vanderWaals(T_r, v_r) - p_r_t, V_r_min, V_r_max)[0]
+
+    V_r_0 = newton(get_AreaDifference, V_r_0)
+    p_r_t = vanderWaals(T_r, V_r_0)
+    V_r_min, V_r_max = get_ReducedVolume(p_r_t)
+
+    p_r[(V_r >= V_r_min) & (V_r <= V_r_max)] = p_r_t
+    return p_r
+
+V_r = np.linspace(0.5, 5.0, 500)
+
+distribution = iter(['#9b59b6', '#4c72b0', '#55a868', '#dbc256', '#c44e52'])
+
+def plot_Pressure_vs_Volume(T):
+    T_r = T / T_c
+    k = next(distribution)
+    ax.plot(V_r, vanderWaals(T_r, V_r), lw = 1.8, alpha = 0.5, color = k)
+    ax.plot(V_r, vanderWaals_Maxwell(T_r, V_r), lw = 1.3, color = k, label='{:.2f}'.format(T_r))
+
+fig, ax = plt.subplots()
+
+for T in range(270, 320, 10):
+    plot_Pressure_vs_Volume(T)
+
+ax.set_xlim(0, 5.0)
+ax.set_xlabel('Volume')
+ax.set_ylim(0, 2.0)
+ax.set_ylabel('Pressure')
+
+plt.show()
+
